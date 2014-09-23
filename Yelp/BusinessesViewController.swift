@@ -8,7 +8,7 @@
 
 import UIKit
 
-class BusinessesViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate {
+class BusinessesViewController: UIViewController, UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate, FiltersViewDelegate {
 
     var client: YelpClient!
     
@@ -45,11 +45,15 @@ class BusinessesViewController: UIViewController, UITableViewDataSource, UITable
     }
 
     func loadBusinessesFromSource() {
+        loadBusinessesFromSource([:])
+    }
+    
+    func loadBusinessesFromSource(filter: [String:AnyObject]) {
         // Do any additional setup after loading the view, typically from a nib.
         client = YelpClient(consumerKey: yelpConsumerKey, consumerSecret: yelpConsumerSecret, accessToken: yelpToken, accessSecret: yelpTokenSecret)
         
         var terms = (self.navigationItem.titleView as UISearchBar).text
-        client.searchWithTerm(terms, success: { (operation: AFHTTPRequestOperation!, response: AnyObject!) -> Void in
+        client.searchWithTerm(terms, filter: filter, success: { (operation: AFHTTPRequestOperation!, response: AnyObject!) -> Void in
             //println(response)
             if var businesses = response["businesses"] as? [[String:AnyObject]] {
                 self.businesses = businesses
@@ -81,22 +85,30 @@ class BusinessesViewController: UIViewController, UITableViewDataSource, UITable
         var cell = tableView.dequeueReusableCellWithIdentifier("BusinessCell") as BusinessCell
 
         var business = self.businesses[indexPath.row]
-        if let imageUrl = business["image_url"]! as? String {
-            cell.thumbnailView.setImageWithURL(NSURL(string: imageUrl))
+        if let imageUrl: AnyObject = business["image_url"] {
+            cell.thumbnailView.setImageWithURL(NSURL(string: imageUrl as String))
         }
-        if let businessName = business["name"]! as? String {
+        if let businessName = (business["name"] ?? nil) as? String {
             cell.businessNameLabel.text = "\(indexPath.row+1). \(businessName)"
+        } else {
+            cell.businessNameLabel.text = "Unknown Business"
         }
-        if let ratingImageUrl = business["rating_img_url_large"]! as? String {
+        if let ratingImageUrl = (business["rating_img_url_large"] ?? nil) as? String {
             cell.ratingImageView.setImageWithURL(NSURL(string: ratingImageUrl))
         }
-        if let distance = business["distance"]! as? Double {
+        if let distance = (business["distance"] ?? nil) as? Double {
             cell.distanceLabel.text = NSString(format: "%0.2f", distance * 0.00062137) + " mi"
+        } else {
+            cell.distanceLabel.text = ""
         }
-        if let reviewCount = business["review_count"]! as? Int {
+        if let reviewCount = (business["review_count"] ?? nil) as? Int {
             cell.reviewsLabel.text = "\(reviewCount) Reviews"
+        } else {
+            cell.reviewsLabel.text = "No Review"
         }
-        if let location = business["location"]! as? [String:AnyObject] {
+        
+        cell.addressLabel.text = ""
+        if let location = (business["location"] ?? nil) as? [String:AnyObject] {
             if let address = location["address"]! as? [String] {
                 if address.count > 0 {
                     if let city = location["city"]! as? String {
@@ -105,7 +117,9 @@ class BusinessesViewController: UIViewController, UITableViewDataSource, UITable
                 }
             }
         }
-        if let categories = business["categories"]! as? [[String]] {
+        
+        cell.categoriesLabel.text = ""
+        if let categories = (business["categories"] ?? nil) as? [[String]] {
             var categoriesText = ", ".join(categories.map({ $0[0] }))
             cell.categoriesLabel.text = categoriesText
         }
@@ -115,14 +129,27 @@ class BusinessesViewController: UIViewController, UITableViewDataSource, UITable
 
     func tableView(tableView: UITableView, didSelectRowAtIndexPath indexPath: NSIndexPath) {
         var business = self.businesses[indexPath.row]
-        if let url = business["url"]! as? String {
+        if let url = (business["url"] ?? nil) as? String {
             UIApplication.sharedApplication().openURL(NSURL(string: url))
         }
+    }
+
+    func filtersView(filtersView: FiltersViewController, filter: [String:AnyObject]) {
+        println("filtersView: \(filter)")
+        loadBusinessesFromSource(filter)
     }
     
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
+    }
+
+    override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject!) {
+        // Get the new view controller using segue.destinationViewController.
+        // Pass the selected object to the new view controller.
+        var filtersNavigationController = segue.destinationViewController as UINavigationController
+        var filtersViewController = filtersNavigationController.viewControllers[0] as FiltersViewController
+        filtersViewController.delegate = self
     }
     
 }
